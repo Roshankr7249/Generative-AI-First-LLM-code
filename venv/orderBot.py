@@ -7,22 +7,26 @@ pn.extension()
 
 load_dotenv()
 
-# Validate API key
+# ----------- API SETUP -----------
+
 api_key = os.getenv("HF_API_KEY")
 if not api_key:
     raise ValueError("HF_API_KEY not found in environment variables")
 
 client = InferenceClient(api_key=api_key)
 
-# ----------- LLM FUNCTION -----------
-
-def get_completion_from_messages(messages, model="mistralai/Mistral-7B-Instruct-v0.2", temperature=0):
-    response = client.chat_completion(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-    )
-    return response.choices[0].message.content
+# ----------- SAFE LLM FUNCTION -----------
+#mistralai/Mistral-7B-Instruct-v0.2    ->>>>> previously used model
+def get_completion_from_messages(messages, model="meta-llama/Meta-Llama-3-8B-Instruct", temperature=0):
+    try:
+        response = client.chat_completion(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ LLM Error: {str(e)}"
 
 
 # ----------- SYSTEM CONTEXT -----------
@@ -43,10 +47,9 @@ You respond in a short, friendly conversational style.
 
 # ----------- UI COMPONENTS -----------
 
+chat_area = pn.Column(height=400, scroll=True)
 inp = pn.widgets.TextInput(placeholder='Enter text here…')
 button_conversation = pn.widgets.Button(name="Chat!")
-chat_area = pn.Column(height=400, scroll=True)
-
 
 # ----------- AUTO START GREETING -----------
 
@@ -69,7 +72,6 @@ def initialize_chat():
         )
     )
 
-
 # ----------- CHAT LOGIC -----------
 
 def collect_messages(event):
@@ -79,10 +81,16 @@ def collect_messages(event):
     if not prompt:
         return
 
+    # Add user message
     context.append({'role': 'user', 'content': prompt})
+
+    # Get assistant response
     response = get_completion_from_messages(context)
+
+    # Add assistant message
     context.append({'role': 'assistant', 'content': response})
 
+    # Update UI
     chat_area.append(
         pn.Row("User:", pn.pane.Markdown(prompt, width=600))
     )
@@ -102,29 +110,17 @@ def collect_messages(event):
         )
     )
 
-
 button_conversation.on_click(collect_messages)
 
 # ----------- DASHBOARD -----------
 
 dashboard = pn.Column(
+    chat_area,
     inp,
     button_conversation,
-    chat_area
 )
 
-# 👇 THIS LINE TRIGGERS AUTO GREETING
+# Start conversation automatically
 initialize_chat()
 
 dashboard.servable()
-
-
-messages =  context.copy()
-messages.append(
-{'role':'system', 'content':'create a json summary of the previous food order. Itemize the price for each item\
- The fields should be 1) pizza, include size 2) list of toppings 3) list of drinks, include size   4) list of sides include size  5)total price '},    
-)
- #The fields should be 1) pizza, price 2) list of toppings 3) list of drinks, include size include price  4) list of sides include size include price, 5)total price '},    
-
-response = get_completion_from_messages(messages, temperature=0)
-print(response)
